@@ -1,118 +1,85 @@
-# SmartRecycle - AI-Based Waste Classification System
+# SmartRecycle
 
-SmartRecycle is a B.Tech CSE minor project for the problem: **How can we easily classify wastes into recyclable and non-recyclable waste?** It combines a Next.js web interface, image upload and camera capture, YOLO object detection, explainable recycling guidance, history, analytics, feedback, and administrative review.
+SmartRecycle is an AI-assisted waste detection and recycling guidance project. It combines a Next.js web application with an Ultralytics YOLO11 inference workflow to locate supported waste items in images and present classification results alongside disposal guidance.
 
-## 1. Project Overview
+> **Project scope:** SmartRecycle is a project/demo, not a certified recycling authority. Model results and the accompanying guidance should be checked against local waste rules.
 
-Waste is often sorted incorrectly because material types can look similar and users may not know how an item should be processed. SmartRecycle analyzes a waste image, detects waste objects, assigns a supported category, and presents a recyclable/non-recyclable decision with confidence, material information, contamination guidance, and recommendations. Users can inspect the image preview and bounding-box overlay, review previous classifications, and submit feedback when a prediction is incorrect.
+## Overview
 
-## 2. Problem Statement
+Waste is often sorted incorrectly when materials look similar, are mixed, or are contaminated. SmartRecycle explores how computer vision can make an initial waste classification easier to access and understand. A user can submit an image, review detected objects and confidence values, and consult material and disposal guidance.
 
-> How can we easily classify wastes into recyclable and non-recyclable waste?
+### Objectives
 
-Manual identification is time-consuming and difficult for mixed, contaminated, small, or visually similar waste. A computer-vision workflow can provide a consistent first decision and make the reasoning visible to the user.
+- Provide a simple image-based waste analysis experience.
+- Detect and classify items covered by the available model checkpoints.
+- Show confidence, detection boxes, and label-based recycling guidance.
+- Record predictions and user feedback for review.
+- Provide dashboard, history, analytics, and review screens around the detection workflow.
 
-## 3. Objectives
+### Key features
 
-- Develop an easy-to-use waste image classification system.
-- Identify waste objects from images.
-- Classify waste into recyclable and non-recyclable categories.
-- Provide AI confidence scores and visual detections where supported.
-- Maintain classification history and waste analytics.
-- Allow feedback on incorrect predictions.
-- Provide admin review for questionable predictions.
-- Create a foundation for improving the model using reviewed data.
+- Upload or drag and drop an image; the analyzer also offers camera capture.
+- View detected objects, bounding boxes, confidence, and recycling metadata.
+- Save prediction records and feedback to a local SQLite database.
+- Review prediction history and dashboard/analytics views.
+- Inspect YOLO training, validation, prediction, and export scripts.
 
-## 4. Key Features
+Some screens and API responses are demo-level. In particular, pickup requests are not persisted, analytics contain fallback/demo values when there is no data, and feedback does not automatically retrain a model. See [Limitations](#limitations).
 
-### Image Analyzer
+## Technology stack
 
-- Image upload, drag and drop, and live camera capture.
-- Image preview with YOLO bounding-box overlay.
-- Waste detection, classification, confidence score, and analysis results.
-- Explainable decision, material, contamination, cleaning, and recycling guidance.
+| Area | Technologies |
+|---|---|
+| Web application | Next.js 16 App Router, React 19, TypeScript |
+| Styling and UI | Tailwind CSS 4, Radix UI Slot, Lucide React, React Dropzone, React Hook Form, Sonner |
+| Charts and data fetching | Recharts, TanStack React Query |
+| API | Next.js route handlers and server-side TypeScript |
+| Database | SQLite, Prisma 7, `better-sqlite3` adapter |
+| Computer vision | Ultralytics YOLO11, Python |
+| Data and model tools | Python scripts under `scripts/` and `training/`; Git LFS for model and dataset files |
 
-### Dashboard
-
-- Total predictions, average confidence, recyclable waste, and non-recyclable waste.
-- Type of Waste Classified donut chart.
-- Recent classifications and quick actions.
-
-### Classification History
-
-- Previous predictions with waste type, classification, confidence, material, contamination, and date.
-- Expandable recommendations for each record.
-
-### Waste Analytics
-
-- Recyclable versus non-recyclable statistics.
-- Waste type distribution and prediction trends exposed by the analytics API.
-- Confidence analysis where available in the current dashboard.
-
-### Admin Review
-
-- Feedback statistics, common mistakes, confusing category pairs, and model reliability.
-- User-corrected and low-confidence prediction review.
-- Confirmed or corrected review status.
-
-### Authentication
-
-The current client-side flow is:
+## Architecture
 
 ```text
-Public Image Analyzer -> Dashboard button -> Login when unauthenticated
-Login -> Dashboard
-Dashboard -> Profile or Sidebar Logout -> session cleared -> Image Analyzer
+Browser (Next.js / React)
+  ├── Analyzer UI
+  │     └── POST /api/predict or POST /api/analyze
+  │           └── TypeScript YOLO adapter
+  │                 └── training/predict.py (Python / Ultralytics)
+  │                       ├── Primary waste checkpoint
+  │                       ├── Optional cardboard detector
+  │                       └── Optional food-label detector
+  └── History, feedback, and dashboard API routes
+        └── Prisma 7 ── SQLite (PredictionLog and Feedback)
 ```
 
-The Dashboard is protected from unauthenticated browser sessions.
+The application invokes Python inference as a child process. The prediction endpoint stores the resulting prediction in SQLite; feedback records are stored separately. The current schema has no user or pickup-request model.
 
-## 5. System Architecture
+### API routes
+
+| Route | Purpose |
+|---|---|
+| `POST /api/predict` | Runs image inference and stores a prediction record. |
+| `POST /api/analyze` | Runs image inference and returns detections without adding a prediction log record. |
+| `GET /api/history` | Returns prediction history; supports search, filter, sort, and limit query parameters. |
+| `GET /api/categories` | Returns the application's recycling-guidance category catalog. |
+| `GET /api/statistics` | Returns dashboard/analytics aggregates and fallback values. |
+| `GET /api/feedback`, `POST /api/feedback` | Reads and stores feedback records. |
+| `POST /api/pickup` | Returns a pending request-shaped response; it does not persist or schedule a pickup. |
+
+The API routes do not implement server-side authentication or authorization.
+
+## YOLO11 workflow
+
+### Main dataset and classes
+
+The primary YOLO configuration is [`dataset/dataset.yaml`](dataset/dataset.yaml). It uses the `images/train`, `images/val`, and `images/test` splits and the corresponding label splits. Some source data is grouped in subdirectories under these splits. Labels use the standard YOLO text format:
 
 ```text
-User
-  |
-  v
-Next.js App Router frontend
-  |
-  +--> Image Analyzer: upload, drag/drop, camera, preview
-  |       |
-  |       v
-  |    POST /api/predict
-  |       |
-  |       v
-  |    Python YOLO inference adapter
-  |       |
-  |       v
-  |    detections, boxes, confidence, recycling metadata
-  |
-  +--> SQLite through Prisma: prediction history and feedback
-  |
-  +--> Dashboard, History, Analytics, and Admin Review API reads
+<class_id> <x_center> <y_center> <width> <height>
 ```
 
-## 6. Technology Stack
-
-- **Frontend:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4.
-- **Backend:** Next.js route handlers and server-side TypeScript modules.
-- **AI/computer vision:** Ultralytics YOLO11 detection workflow, Python inference script, and exported `.pt`/`.onnx` model artifacts.
-- **Database:** SQLite with Prisma 7 and `better-sqlite3` adapter.
-- **UI and charts:** Lucide React, Radix UI slot, Recharts, React Hook Form, React Dropzone, and Sonner.
-- **Tools:** npm, Git, GitHub, VS Code, and Python for dataset/model scripts.
-
-## 7. AI / YOLO Model Details
-
-The project contains a YOLO11 training and inference workflow. The API route calls `src/lib/yolo-model.ts`, which prioritizes the waste-trained `models/waste-best.pt` checkpoint over older generic exports, uses `models/cardboard-best.pt` as a specialized cardboard detector when the primary model is uncertain, and uses the generic COCO export only for its explicit common-food labels. It writes the uploaded image to a temporary file, invokes `training/predict.py`, and converts returned objects into enriched application predictions. Each detection can include a label, confidence, normalized bounding box, material, recyclability, contamination, recommendation, and explanation.
-
-The primary dataset has six YOLO classes: Plastic Bottle, Plastic Bag, PET Plastic, HDPE Plastic, Glass Bottle, and Paper. Cardboard has a separate detector trained from the source dataset's explicitly named cardboard examples. Common food objects are mapped to Food Waste only when the COCO model explicitly recognizes one of its food classes; unrelated COCO objects are shown as unclassified objects, never converted into guessed waste categories. If no detector can confidently identify an upload, the API returns a manual-review result instead of an error. Other categories have disposal guidance in the interface, but need labeled training images before reliable waste classification. The fallback adapter in `src/lib/inference-service.ts` remains available as a separate typed inference path, but the prediction API uses the YOLO adapter.
-
-The recorded training run used 10 epochs. Actual output files are summarized in [docs/model-evaluation.md](docs/model-evaluation.md); no unverified performance claims are made here.
-
-## 8. Waste Categories
-
-The dataset configuration supports:
-
-The interface has disposal guidance for these 16 categories. The primary training labels cover the first six, and Cardboard and common Food Waste have auxiliary detection paths; the remaining categories are guidance options, not model-supported predictions yet.
+The configured primary detector has **six classes**:
 
 1. Plastic Bottle
 2. Plastic Bag
@@ -120,147 +87,199 @@ The interface has disposal guidance for these 16 categories. The primary trainin
 4. HDPE Plastic
 5. Glass Bottle
 6. Paper
-7. Cardboard
-8. Aluminium Can
-9. Steel Can
-10. Food Waste
-11. Organic Waste
-12. E-Waste
-13. Battery
-14. Textile
-15. Tetra Pak
-16. Others
 
-The application metadata additionally provides recycling guidance for detected labels.
+The UI's category catalog is broader than the main detector's training classes; a category appearing in the interface does not mean the model has been trained to recognize it.
 
-## 9. Project Structure
+### Inference paths
 
-```text
-SmartRecycle-Waste-Classification/
-├── dataset/                 # YOLO configuration, documentation, and local dataset workspace
-├── docs/                    # Results and model-evaluation notes
-├── models/                  # Canonical exported model artifacts
-├── prisma/                  # Schema and migrations
-├── public/                  # Static assets
-├── scripts/                 # Dataset preparation, validation, and statistics scripts
-├── src/
-│   ├── app/                 # Pages and API route handlers
-│   ├── components/          # Analyzer, dashboard, admin, pickup, and UI components
-│   ├── hooks/               # Client hooks such as waste classification
-│   ├── lib/                 # Prisma, inference, API, auth, types, and server store
-│   └── generated/           # Generated Prisma client (regenerated during setup)
-├── training/                # YOLO train, validate, test, predict, and export scripts
-├── .env.example
-├── .gitignore
-├── next.config.ts
-├── package.json
-├── package-lock.json
-├── prisma.config.ts
-└── tsconfig.json
+- The application prefers `models/waste-best.pt` as its primary waste-trained checkpoint and runs the inference code in `training/predict.py`. The application uses a primary confidence threshold of `0.60`.
+- If the primary model returns no detections or has detections below the configured confidence condition, it can also run `models/cardboard-best.pt` at `0.60`. This is a separate one-class cardboard model.
+- Under the same uncertainty condition, `models/best.pt` can be used as an auxiliary detector for explicitly recognized common food labels. Those labels are reported as Food Waste; unrelated generic objects are not assigned a guessed waste class.
+- Objects not mapped to a supported waste label are either omitted or returned as unclassified, depending on the inference path. A no-detection result is presented for manual identification rather than inventing a material.
+
+For the focused cardboard training data, [`training/prepare_cardboard_dataset.py`](training/prepare_cardboard_dataset.py) selects images whose names begin with `cardboard` as positives from the source `Garbage_detection` set and samples other images as backgrounds. It writes its generated dataset under `runs/smartrecycle-cardboard-data/`.
+
+### Training and evaluation
+
+[`training/train.py`](training/train.py) starts from `yolo11n.pt` by default, uses `dataset/dataset.yaml`, and defaults to 50 epochs, image size 640, and batch size 16. A recorded run is described in [`docs/model-evaluation.md`](docs/model-evaluation.md); it used 10 epochs and batch size 8. Training outputs are written under `training/` by default. Training does not automatically replace the application's `models/waste-best.pt` checkpoint.
+
+The repository includes training, validation, test, prediction, evaluation, and export scripts under `training/`. Use `--help` on a script for its available options. For example:
+
+```bash
+# Train using the script defaults, overriding selected options
+npm run yolo:train -- --epochs 10 --batch 8
+
+# Validate the primary checkpoint against the configured validation split
+npm run yolo:validate -- --weights models/waste-best.pt
+
+# Evaluate the primary checkpoint on the test split
+npm run yolo:test -- --weights models/waste-best.pt --task test
+
+# Predict on one image
+npm run yolo:predict -- --weights models/waste-best.pt --image path/to/image.jpg
+
+# Export directly with the script's supported CLI
+python training/export.py --weights models/waste-best.pt --format onnx
 ```
 
-## 10. Installation and Setup
+The Python scripts require Ultralytics. To use a newly trained checkpoint in the web application, copy or move it to `models/waste-best.pt`. The application also needs a working Python interpreter and the applicable model files at inference time.
+
+## Model evaluation and screenshots
+
+The repository's [model evaluation notes](docs/model-evaluation.md) report results for the separate cardboard detector on a 156-image held-out validation split at confidence `0.60`:
+
+| Metric | Recorded value |
+|---|---:|
+| Precision | 0.841 |
+| Recall | 0.853 |
+| mAP50 | 0.783 |
+| mAP50-95 | 0.688 |
+
+These are the documented results for that checkpoint and split only; they are not an overall SmartRecycle accuracy score or a guarantee of performance on other images. No overall final accuracy score is claimed.
+
+The tracked model figures are experiment artifacts, not product screenshots:
+
+- [YOLO training results](docs/screenshots/yolo-training-results.png)
+- [Confusion matrix](docs/screenshots/yolo-confusion-matrix.png)
+- [Normalized confusion matrix](docs/screenshots/yolo-confusion-matrix-normalized.png)
+- [Validation labels](docs/screenshots/yolo-validation-labels.jpg)
+- [Validation predictions](docs/screenshots/yolo-validation-predictions.jpg)
+
+No application UI screenshots are currently included in `docs/screenshots/`.
+
+## Project structure
+
+```text
+SmartRecycle/
+├── dataset/                 # YOLO dataset configuration, images, labels, and notes
+├── docs/                    # Model evaluation notes and YOLO figures
+├── models/                  # Inference checkpoints and exports (Git LFS)
+├── prisma/                  # SQLite schema and migrations
+├── public/                  # Static assets
+├── scripts/                 # Dataset preparation, validation, and statistics
+├── src/
+│   ├── app/                 # Next.js pages and API route handlers
+│   ├── components/          # Analyzer, dashboard, admin, pickup, and UI
+│   ├── hooks/               # Client-side hooks
+│   ├── lib/                 # Auth, Prisma, inference, data, and utilities
+│   └── generated/prisma/    # Generated Prisma client
+├── training/                # YOLO training, prediction, evaluation, and export
+├── .env.example             # Environment variable template
+├── package.json             # npm scripts and JavaScript dependencies
+├── prisma.config.ts         # Prisma schema, migration, and datasource config
+└── README.md
+```
+
+## Setup
 
 ### Prerequisites
 
-- Node.js compatible with the installed Next.js 16 toolchain.
-- npm (the repository includes `package-lock.json`).
-- Python 3 with the packages required by the training/inference scripts and a working Python executable.
-- A local SQLite database; Prisma uses `file:./dev.db` by default.
+- Node.js `>=20.9.0` and npm (the Next.js 16 package declares Node.js `>=20.9.0`).
+- Python 3 and `pip`. Python is used by the YOLO training and inference scripts.
+- Git LFS to download the tracked dataset and model artifacts.
+- Sufficient disk space for the LFS-managed images and model weights.
 
-### Clone and install
+The repository does not include a Python dependency lockfile or `requirements.txt`; the Python scripts import Ultralytics. Install it into the interpreter that will run inference and training.
+
+### Clone and install JavaScript dependencies
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/SmartRecycle-Waste-Classification.git
-cd SmartRecycle-Waste-Classification
+git lfs install
+git clone https://github.com/buildwithanish2/SmartRecycle.git
+cd SmartRecycle
 npm install
 ```
 
-### Environment variables
+If Git LFS was not installed when cloning, run `git lfs pull` from the repository directory to fetch the dataset and model files.
 
-```bash
-copy .env.example .env       # Windows
-# cp .env.example .env       # macOS/Linux
+### Configure Python for YOLO
+
+From PowerShell on Windows:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install ultralytics
 ```
 
-- `DATABASE_URL` controls the Prisma datasource and defaults to `file:./dev.db`.
-- `PYTHON_BIN` optionally selects the Python executable used for YOLO inference.
-- `WASTE_MODEL_PATH` is an optional model-path hint used by the fallback inference service.
+The application automatically uses `.venv\Scripts\python.exe` when that file exists; otherwise it runs `python`. Set `PYTHON_BIN` in `.env` if you need to choose a different interpreter.
 
-Never commit `.env`; use `.env.example` for placeholder names only.
+### Configure environment
 
-### Database setup
+Create `.env` from the checked-in template.
+
+PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS/Linux:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Template default | Purpose |
+|---|---|---|
+| `DATABASE_URL` | `file:./dev.db` | SQLite URL used by Prisma. |
+| `PYTHON_BIN` | Empty | Optional Python executable override for the active YOLO inference adapter. |
+| `WASTE_MODEL_PATH` | Empty | Read by the separate `src/lib/inference-service.ts` adapter; the active `/api/predict` route uses `src/lib/yolo-model.ts` and does not use this variable to select its checkpoint. |
+
+Do not commit `.env`; it is ignored by Git.
+
+### Initialize the database
+
+The Prisma schema is in [`prisma/schema.prisma`](prisma/schema.prisma). It defines `PredictionLog` and `Feedback` models on SQLite.
 
 ```bash
 npx prisma generate
 npx prisma migrate dev
 ```
 
-### Run the application
+### Run the web application
 
 ```bash
 npm run dev
 ```
 
-The development server opens the public Image Analyzer. The Dashboard button opens Login when no browser session exists.
+Open the local URL printed by Next.js (normally `http://localhost:3000`). The root page opens the public analyzer.
 
-### Production commands
+To create and run a production build:
 
 ```bash
 npm run build
 npm run start
 ```
 
-## 11. How to Use the Application
+Other package scripts include `npm run lint`, `npm run dataset:validate`, and `npm run dataset:stats`. The exact scripts are listed in [`package.json`](package.json).
 
-1. Open SmartRecycle; the Image Analyzer is the public landing page.
-2. Upload an image, drag and drop one, or use Live Camera.
-3. Review the image preview and detected bounding boxes.
-4. Run the analysis and inspect classification, confidence, material, and recycling guidance.
-5. Submit feedback if the prediction is incorrect.
-6. Select Dashboard and sign in when prompted.
-7. Review Dashboard statistics, Classification History, Waste Analytics, and Admin Review.
+## Using the application
 
-## 12. Authentication Flow
+1. Open the public analyzer.
+2. Upload, drag and drop, or capture an image.
+3. Review any returned detections and bounding boxes.
+4. Check the predicted label, confidence, material metadata, and recycling recommendation.
+5. Submit feedback if the result is incorrect.
+6. Open the dashboard to review logged predictions, history, and available analytics/review screens.
 
-```text
-Logged out: Image Analyzer -> Dashboard -> Login -> successful login -> Dashboard
-Logged in:  Image Analyzer -> Dashboard
-Logout:     Dashboard -> Profile or Sidebar Logout -> cleared session -> Image Analyzer
-```
+The guidance is an informational aid. Local recycling rules vary, and the analyzer cannot reliably assess contamination or confirm material composition from every image.
 
-The current implementation uses a browser auth-session flag and same-tab Next.js routing. It is suitable for the current minor-project demo flow and is not a substitute for production identity management.
+## Authentication: current behavior
 
-## 13. Results and Outputs
+The login screen asks for an email and password, but it does not validate credentials or contact an authentication service. Submitting any non-empty values sets `smartrecycle-authenticated=true` in browser `localStorage`; the dashboard checks that flag in the client and redirects to the login page if it is absent. Logging out clears the browser-side flag and returns to the home page.
 
-The repository includes documentation of available local training outputs in [docs/model-evaluation.md](docs/model-evaluation.md). The captured YOLO result images are stored in [docs/screenshots](docs/screenshots) where present. No dashboard or UI screenshots were found in the original project, so none were fabricated.
+This is a demo navigation gate only. It is not secure authentication, does not create user accounts, and does not protect API routes or database records.
 
-### Available YOLO artifacts
+## Limitations and future improvements
 
-![YOLO confusion matrix](docs/screenshots/yolo-confusion-matrix.png)
+- The primary trained dataset has six classes. Cardboard and common food labels use auxiliary detectors; other guidance categories are not necessarily recognized by a trained model.
+- Detection confidence is not a calibrated guarantee. The material, contamination, and disposal text is derived from label-based application rules; it is not a separate verified contamination analysis.
+- Image quality, lighting, occlusion, mixed materials, and local recycling practices can affect whether a recommendation is appropriate.
+- The client-only login is not an identity or authorization system.
+- Feedback is stored for review but is not converted into annotations or used for automatic retraining.
+- Analytics can return fallback values when records are absent; treat these as demo UI data, not model evaluation results.
+- Pickup submission currently returns a pending response without persistence or integration with a collection service.
 
-![YOLO validation predictions](docs/screenshots/yolo-validation-predictions.jpg)
-
-The raw YOLO dataset is included through Git LFS so the repository remains self-contained for retraining. Generated label cache files and the `runs/` experiment-output tree are excluded.
-
-## 14. Limitations
-
-- Detection quality depends on training data, image quality, lighting, camera quality, and object visibility.
-- Similar-looking or contaminated materials may be difficult to distinguish.
-- Confidence is a model score, not a guarantee of correctness.
-- The current browser auth flow is intentionally lightweight and should be replaced with a server-backed identity provider for production use.
-- Raw training images are stored through Git LFS because of their size.
-
-## 15. Future Enhancements
-
-- Expand and diversify the training dataset.
-- Improve difficult-category and contamination handling.
-- Add real-time camera detection and a mobile application.
-- Improve the human-feedback-to-annotation pipeline and automated retraining.
-- Add richer analytics, multilingual guidance, and production-grade authentication.
-
-## 16. Project Results Summary
-
-The current project demonstrates AI-assisted waste image analysis, YOLO detection and bounding boxes, recyclable/non-recyclable classification, confidence scoring, prediction history, analytics, user feedback, admin review, and an authentication-protected dashboard.
-#   S m a r t R e c y c l e  
- 
+Possible next steps include expanding and documenting the labeled dataset, defining a repeatable evaluation protocol, building a reviewed feedback-to-training pipeline, implementing server-side authentication and authorization, persisting pickup requests, and replacing demo analytics defaults with explicitly sourced values.
