@@ -1,0 +1,11 @@
+path: E:/SmartRecycle-Waste-Classification/runs/smartrecycle-balanced-data
+train: images/train
+val: images/val
+nc: 6
+names:
+  0: Plastic Bottle
+  1: Plastic Bag
+  2: PET Plastic
+  3: HDPE Plastic
+  4: Glass Bottle
+  5: Paper
